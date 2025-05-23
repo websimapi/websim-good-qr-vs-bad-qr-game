@@ -247,7 +247,7 @@
             <p>2. Keep your phone camera focused on the bouncing GREEN QR code</p>
             <p>3. Avoid scanning the red QR codes (they're rickrolls!)</p>
             <p>4. Score increases while the good QR is in view</p>
-            <button class="start-btn" onclick="startGame()">Start Game</button>
+            <button class="start-btn" id="start-btn">Start Game</button>
         </div>
 
         <!-- Game Over Modal -->
@@ -255,7 +255,7 @@
             <h2>Game Over!</h2>
             <p>You scanned a bad QR code!</p>
             <p>Final Score: <span id="final-score">0</span></p>
-            <button class="restart-btn" onclick="restartGame()">Try Again</button>
+            <button class="restart-btn" id="restart-btn">Try Again</button>
         </div>
     </div>
 
@@ -301,12 +301,26 @@
                     <h2>Phone Connected!</h2>
                     <p>Keep your camera focused on the bouncing GREEN QR code.</p>
                     <p>Don't scan the bad QR codes!</p>
-                    <button class="start-btn" onclick="startPhoneCamera()">Start Camera</button>
+                    <button class="start-btn" id="start-btn">Start Camera</button>
                 `;
             }
 
             setupMultiplayer();
             generateQrCodes();
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            // Set up button event listeners
+            document.getElementById('start-btn').addEventListener('click', () => {
+                if (gameState.isPhone) {
+                    startPhoneCamera();
+                } else {
+                    startGame();
+                }
+            });
+
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
         }
 
         function setupMultiplayer() {
@@ -512,11 +526,6 @@
                 qrScanner.stop();
             }
         }
-
-        // Make functions globally available for onclick handlers
-        window.startGame = startGame;
-        window.startPhoneCamera = startPhoneCamera;
-        window.restartGame = restartGame;
 
         // Initialize the game
         init();
