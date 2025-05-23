@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Good QR vs Bad QR Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 10px;
+            width: 80vmin;
+            height: 80vmin;
+            position: relative;
+        }
+
+        .qr-slot {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .qr-slot canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .good-qr {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            border: 3px solid #4CAF50;
+            z-index: 10;
+            transition: all 0.5s ease-in-out;
+        }
+
+        .good-qr canvas {
+            display: block;
+        }
+
+        .ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            z-index: 100;
+        }
+
+        .score {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            font-size: 1.2rem;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .phone-view {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            background: black;
+            position: relative;
+        }
+
+        .phone-view.active {
+            display: block;
+        }
+
+        #camera-view {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .camera-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 250px;
+            height: 250px;
+            border: 2px solid #4CAF50;
+            border-radius: 20px;
+            box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5);
+        }
+
+        .phone-ui {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .credit {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            z-index: 100;
+        }
+
+        .credit a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+
+        .game-over {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 200;
+            display: none;
+        }
+
+        .game-over.show {
+            display: block;
+        }
+
+        .restart-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-size: 1rem;
+        }
+
+        .instructions {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 200;
+            max-width: 400px;
+        }
+
+        .instructions.hide {
+            display: none;
+        }
+
+        .start-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Desktop View -->
+        <div id="desktop-view">
+            <div class="ui">
+                <div class="score">Score: <span id="score">0</span></div>
+                <div class="status" id="status">Connecting...</div>
+            </div>
+
+            <div class="game-grid" id="game-grid">
+                <!-- QR code slots will be generated here -->
+            </div>
+
+            <div class="good-qr" id="good-qr">
+                <!-- Good QR code will be generated here -->
+            </div>
+        </div>
+
+        <!-- Phone View -->
+        <div class="phone-view" id="phone-view">
+            <video id="camera-view"></video>
+            <div class="camera-overlay"></div>
+            <div class="phone-ui">
+                <div style="font-size: 1.5rem; font-weight: bold;">Keep the GREEN QR code in view!</div>
+                <div style="margin-top: 10px;">Score: <span id="phone-score">0</span></div>
+            </div>
+        </div>
+
+        <!-- Instructions Modal -->
+        <div class="instructions" id="instructions">
+            <h2>Good QR vs Bad QR</h2>
+            <p>1. Open this page on your desktop AND phone</p>
+            <p>2. Keep your phone camera focused on the bouncing GREEN QR code</p>
+            <p>3. Avoid scanning the red QR codes (they're rickrolls!)</p>
+            <p>4. Score increases while the good QR is in view</p>
+            <button class="start-btn" onclick="startGame()">Start Game</button>
+        </div>
+
+        <!-- Game Over Modal -->
+        <div class="game-over" id="game-over">
+            <h2>Game Over!</h2>
+            <p>You scanned a bad QR code!</p>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button class="restart-btn" onclick="restartGame()">Try Again</button>
+        </div>
+    </div>
+
+    <div class="credit">
+        <div>Inspired by: <a href="https://www.youtube.com/watch?v=TlafDammd6s&ab_channel=JaphyRiddle" target="_blank">Japhy Riddle</a></div>
+    </div>
+
+    <script>
+        const room = new WebsimSocket();
+        let gameState = {
+            score: 0,
+            gameRunning: false,
+            goodQrPosition: { x: 0, y: 0 },
+            isPhone: false
+        };
+
+        let scoreInterval = null;
+        let qrAnimationInterval = null;
+        let qrScanner = null;
+
+        // QR code URLs
+        const badQrUrls = [
+            'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'https://www.youtube.com/watch?v=oHg5SJYRHA0',
+            'https://www.youtube.com/watch?v=iik25wqIuFo',
+            'https://www.youtube.com/watch?v=Lrj2Hq7xqQ8'
+        ];
+        const goodQrUrl = 'https://websim.ai/@api/bad-qr';
+
+        async function init() {
+            await room.initialize();
+            
+            // Detect if this is a mobile device
+            gameState.isPhone = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            if (gameState.isPhone) {
+                document.getElementById('desktop-view').style.display = 'none';
+                document.getElementById('phone-view').classList.add('active');
+                document.getElementById('instructions').innerHTML = `
+                    <h2>Phone Connected!</h2>
+                    <p>Keep your camera focused on the bouncing GREEN QR code.</p>
+                    <p>Don't scan the bad QR codes!</p>
+                    <button class="start-btn" onclick="startPhoneCamera()">Start Camera</button>
+                `;
+            }
+
+            setupMultiplayer();
+            generateQrCodes();
+        }
+
+        function setupMultiplayer() {
+            room.subscribePresence((presence) => {
+                updateStatus();
+            });
+
+            room.onmessage = (event) => {
+                const data = event.data;
+                switch (data.type) {
+                    case 'qr_scanned':
+                        handleQrScanned(data.url, data.clientId);
+                        break;
+                    case 'score_update':
+                        updateScore(data.score);
+                        break;
+                    case 'game_over':
+                        showGameOver(data.score);
+                        break;
+                    case 'game_start':
+                        if (gameState.isPhone) {
+                            startPhoneCamera();
+                        }
+                        break;
+                }
+            };
+
+            updateStatus();
+        }
+
+        function updateStatus() {
+            const connectedClients = Object.keys(room.peers).length;
+            const statusEl = document.getElementById('status');
+            
+            if (connectedClients < 2) {
+                statusEl.textContent = `Waiting for ${gameState.isPhone ? 'desktop' : 'phone'} connection...`;
+            } else {
+                statusEl.textContent = `${connectedClients} devices connected`;
+            }
+        }
+
+        async function generateQrCodes() {
+            const grid = document.getElementById('game-grid');
+            grid.innerHTML = '';
+
+            // Generate bad QR codes for the grid
+            for (let i = 0; i < 16; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'qr-slot';
+                
+                const canvas = document.createElement('canvas');
+                const url = badQrUrls[i % badQrUrls.length];
+                
+                await QRCode.toCanvas(canvas, url, { width: 100, margin: 1 });
+                slot.appendChild(canvas);
+                grid.appendChild(slot);
+            }
+
+            // Generate good QR code
+            const goodQrEl = document.getElementById('good-qr');
+            goodQrEl.innerHTML = '';
+            const goodCanvas = document.createElement('canvas');
+            await QRCode.toCanvas(goodCanvas, goodQrUrl, { width: 100, margin: 1 });
+            goodQrEl.appendChild(goodCanvas);
+
+            positionGoodQr();
+        }
+
+        function positionGoodQr() {
+            const grid = document.getElementById('game-grid');
+            const goodQr = document.getElementById('good-qr');
+            const gridRect = grid.getBoundingClientRect();
+            
+            // Calculate grid cell size
+            const cellWidth = gridRect.width / 4;
+            const cellHeight = gridRect.height / 4;
+            
+            // Position good QR at a random grid position
+            const col = Math.floor(Math.random() * 4);
+            const row = Math.floor(Math.random() * 4);
+            
+            goodQr.style.left = `${gridRect.left + col * cellWidth + 10}px`;
+            goodQr.style.top = `${gridRect.top + row * cellHeight + 10}px`;
+            goodQr.style.width = `${cellWidth - 20}px`;
+            goodQr.style.height = `${cellHeight - 20}px`;
+            
+            gameState.goodQrPosition = { x: col, y: row };
+        }
+
+        function startGame() {
+            document.getElementById('instructions').classList.add('hide');
+            gameState.gameRunning = true;
+            gameState.score = 0;
+            updateScore(0);
+
+            // Start QR animation
+            qrAnimationInterval = setInterval(() => {
+                positionGoodQr();
+            }, 2000);
+
+            // Start score increment
+            scoreInterval = setInterval(() => {
+                if (gameState.gameRunning) {
+                    gameState.score += 10;
+                    updateScore(gameState.score);
+                    
+                    // Broadcast score to phone
+                    room.send({
+                        type: 'score_update',
+                        score: gameState.score
+                    });
+                }
+            }, 100);
+
+            // Notify phone to start
+            room.send({
+                type: 'game_start'
+            });
+        }
+
+        async function startPhoneCamera() {
+            try {
+                const video = document.getElementById('camera-view');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                video.srcObject = stream;
+                await video.play();
+
+                // Initialize QR scanner
+                qrScanner = new QrScanner(video, result => {
+                    handleQrScan(result);
+                }, {
+                    preferredCamera: 'environment',
+                    highlightScanRegion: false,
+                    highlightCodeOutline: false,
+                });
+                
+                await qrScanner.start();
+                document.getElementById('instructions').classList.add('hide');
+            } catch (error) {
+                console.error('Camera access denied:', error);
+                alert('Camera access is required to play this game!');
+            }
+        }
+
+        function handleQrScan(result) {
+            const url = result.data;
+            
+            // Send scan result to desktop
+            room.send({
+                type: 'qr_scanned',
+                url: url,
+                clientId: room.clientId
+            });
+        }
+
+        function handleQrScanned(url, clientId) {
+            if (url === goodQrUrl) {
+                // Good QR scanned - continue game
+                console.log('Good QR scanned!');
+            } else {
+                // Bad QR scanned - game over
+                gameOver();
+                room.send({
+                    type: 'game_over',
+                    score: gameState.score
+                });
+            }
+        }
+
+        function gameOver() {
+            gameState.gameRunning = false;
+            clearInterval(scoreInterval);
+            clearInterval(qrAnimationInterval);
+            
+            if (qrScanner) {
+                qrScanner.stop();
+            }
+        }
+
+        function showGameOver(score) {
+            document.getElementById('final-score').textContent = score;
+            document.getElementById('game-over').classList.add('show');
+        }
+
+        function updateScore(score) {
+            document.getElementById('score').textContent = score;
+            const phoneScoreEl = document.getElementById('phone-score');
+            if (phoneScoreEl) {
+                phoneScoreEl.textContent = score;
+            }
+        }
+
+        function restartGame() {
+            document.getElementById('game-over').classList.remove('show');
+            document.getElementById('instructions').classList.remove('hide');
+            gameState.gameRunning = false;
+            gameState.score = 0;
+            updateScore(0);
+            
+            if (qrScanner) {
+                qrScanner.stop();
+            }
+        }
+
+        // Initialize the game
+        init();
+    </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
+
